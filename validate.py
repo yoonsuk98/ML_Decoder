@@ -13,6 +13,8 @@ from src_files.models.tresnet.tresnet import InplacABN_to_ABN
 from src_files.helper_functions.helper_functions import mAP, CocoDetection, AverageMeter
 from src_files.models import create_model
 
+from torchinfo import summary
+
 parser = argparse.ArgumentParser(description='PyTorch MS_COCO validation')
 parser.add_argument('--data', type=str, default='/home/MSCOCO_2014/')
 parser.add_argument('--model-name', default='tresnet_l')
@@ -36,14 +38,21 @@ parser.add_argument('--decoder-embedding', default=768, type=int)
 parser.add_argument('--zsl', default=0, type=int)
 
 
+parser.add_argument('--gpu-num', default='0',type=str)
+
 def main():
     args = parser.parse_args()
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_num
 
     # Setup model
     print('creating model {}...'.format(args.model_name))
     model = create_model(args, load_head=True).cuda()
     state = torch.load(args.model_path, map_location='cpu')
     model.load_state_dict(state['model'], strict=True)
+
+    summary(model, input_size=(1, 3, args.image_size, args.image_size))
+    # print(model)
     model.eval()
     ########### eliminate BN for faster inference ###########
     model = model.cpu()
@@ -89,6 +98,7 @@ def validate_multi(val_loader, model, args):
         target = target.max(dim=1)[0]
         # compute output
         with torch.no_grad():
+            output = Sig(model(input.cuda().half())).cpu()
             output = Sig(model(input.cuda().half())).cpu()
 
         # for mAP calculation
