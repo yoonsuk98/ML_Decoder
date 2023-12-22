@@ -16,6 +16,29 @@ Official PyTorch Implementation
 > <br/> DAMO Academy, Alibaba
 > Group
 
+# Dependency install
+In anaconda 
+```
+conda create --name multilabel2 -y
+conda activate  multilabel2
+
+# 버전 이미 설치되어있으면 설치 안해도 됨
+conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.8 -c pytorch -c nvidia
+export CUDA_HOME=$CONDA_PREFI
+sudo apt-get --yes install build-essential
+conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
+sudo apt-get --purge remove gcc
+sudo apt-get install --reinstall gcc
+sudo apt-get update
+sudo apt-get install g++
+pip install inplace-abn
+pip install pycocotools
+pip install randaugment
+conda install -c anaconda scikit-learn
+conda install -c anaconda pandas
+conda install -c conda-forge torchinfo
+```
+
 **Abstract**
 
 In this paper, we introduce ML-Decoder, a new attention-based classification head.  ML-Decoder predicts the existence of class labels via queries, and enables better utilization of spatial data compared to global average pooling.
