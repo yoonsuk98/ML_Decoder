@@ -14,11 +14,17 @@ from src_files.loss_functions.losses import AsymmetricLoss
 from randaugment import RandAugment
 from torch.cuda.amp import GradScaler, autocast
 
+from torchvision.models import *
+
+from torchinfo import summary
+import time
+
 parser = argparse.ArgumentParser(description='PyTorch MS_COCO Training')
 parser.add_argument('--data', type=str, default='/home/MSCOCO_2014/')
 parser.add_argument('--lr', default=1e-4, type=float)
 parser.add_argument('--model-name', default='tresnet_l')
 parser.add_argument('--model-path', default='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ML_Decoder/tresnet_l_pretrain_ml_decoder.pth', type=str)
+
 parser.add_argument('--num-classes', default=80)
 parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                     help='number of data loading workers')
@@ -33,16 +39,29 @@ parser.add_argument('--num-of-groups', default=-1, type=int)  # full-decoding
 parser.add_argument('--decoder-embedding', default=768, type=int)
 parser.add_argument('--zsl', default=0, type=int)
 
+parser.add_argument('--model-info', type=str)
+parser.add_argument('--gpu-num', default='0',type=str)
 def main():
+    start_time=time.time()
+
     args = parser.parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_num
+
+    print("#######################################################")
+    print("Information of experiment : {}".format(args.model_info))
+    print("######################################################")
 
     # Setup model
     print('creating model {}...'.format(args.model_name))
     model = create_model(args).cuda()
+    # summary(model,input_size=(3,args.image_size,args.image_size))
+
+
 
     # local_rank = torch.distributed.get_rank()
-    # torch.cuda.set_device(0)
-    # model = torch.nn.DataParallel(model,device_ids=[0])
+    # torch.cuda.set_device(1)
+    # model = torch.nn.DataParallel(model,device_ids=[1])
+    # model = torch.nn.DataParallel(model, device_ids=[0,1,2])
 
     print('done')
 
@@ -82,12 +101,18 @@ def main():
         num_workers=args.workers, pin_memory=False)
 
     # Actuall Training
-    train_multi_label_coco(model, train_loader, val_loader, args.lr)
+    train_multi_label_coco(model, train_loader, val_loader, args.lr,args.model_name,args.model_info,args)
+
+    print("Elasped time : {} sec".format(time.time()-start_time))
 
 
-def train_multi_label_coco(model, train_loader, val_loader, lr):
+def train_multi_label_coco(model, train_loader, val_loader, lr,model_name,model_info,args):
+    try:
+        os.mkdir('models/{}_{}'.format(model_name,model_info))
+    except:
+        pass
     ema = ModelEma(model, 0.9997)  # 0.9997^641=0.82
-
+    summary(model, input_size=(1,3, args.image_size, args.image_size))
     # set optimizer
     Epochs = 40
     weight_decay = 1e-4
@@ -103,6 +128,7 @@ def train_multi_label_coco(model, train_loader, val_loader, lr):
     scaler = GradScaler()
     for epoch in range(Epochs):
         for i, (inputData, target) in enumerate(train_loader):
+
             inputData = inputData.cuda()
             target = target.cuda()
             target = target.max(dim=1)[0]
@@ -130,8 +156,11 @@ def train_multi_label_coco(model, train_loader, val_loader, lr):
                               loss.item()))
 
         try:
-            torch.save(model.state_dict(), os.path.join(
-                'models/', 'model-{}-{}.ckpt'.format(epoch + 1, i + 1)))
+            # torch.save(model.state_dict(), os.path.join(
+            #     'models/{}_{}/'.format(model_name,model_info), 'model-{}-{}.ckpt'.format(epoch + 1, i + 1)))
+            torch.save({'model':model.state_dict()}, os.path.join(
+                'models/{}_{}/'.format(model_name, model_info), 'model-{}-{}.ckpt'.format(epoch + 1, i + 1)))
+
         except:
             pass
 
@@ -142,8 +171,10 @@ def train_multi_label_coco(model, train_loader, val_loader, lr):
         if mAP_score > highest_mAP:
             highest_mAP = mAP_score
             try:
-                torch.save(model.state_dict(), os.path.join(
-                    'models/', 'model-highest.ckpt'))
+                # torch.save(model.state_dict(), os.path.join(
+                #     'models/{}_{}/'.format(model_name,model_info), 'model-highest.ckpt'))
+                torch.save({'model':model.state_dict()}, os.path.join(
+                    'models/{}_{}/'.format(model_name, model_info), 'model-highest.ckpt'))
             except:
                 pass
         print('current_mAP = {:.2f}, highest_mAP = {:.2f}\n'.format(mAP_score, highest_mAP))
